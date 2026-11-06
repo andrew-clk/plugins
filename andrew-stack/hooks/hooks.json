@@ -1,0 +1,17 @@
+{
+  "description": "Ask before irreversible shell commands: force-push to main, production deploys, writes to live money APIs, destructive SQL.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
