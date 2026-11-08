@@ -11,7 +11,7 @@ dry=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) dry=1; shift ;;
-    --source) source_ref="$2"; shift 2 ;;
+    --source) [[ $# -ge 2 ]] || { echo "--source requires a value" >&2; exit 64; }; source_ref="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 64 ;;
   esac
 done
@@ -32,6 +32,9 @@ begin, end = "<!-- andrew-stack:begin -->", "<!-- andrew-stack:end -->"
 wrapped = f"{begin}\n{block}\n{end}"
 text = target.read_text() if target.exists() else ""
 pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
+outside = pattern.sub("", text)
+if any(phrase in outside for phrase in ("git-sync-on-start", "git pull --ff-only", "resolve it before starting work")):
+    print(f"  WARNING: legacy Git policy outside the managed block in {target}; review it for conflicts. Preserved unchanged.", file=sys.stderr)
 if pattern.search(text):
     text = pattern.sub(lambda _: wrapped, text)
 elif text.strip():
@@ -51,15 +54,25 @@ if command -v claude >/dev/null; then
   else
     run claude plugin marketplace add "$source_ref"
   fi
-  run claude plugin install "pstack@$market"
-  run claude plugin install "andrew-stack@$market"
-  claude_block="$(mktemp)"
-  cat >"$claude_block" <<'EOF'
-## Engineering style (andrew-stack)
-
-For any non-trivial engineering work in a git repo, load the `andrew-stack:andrew-mode` skill before you start, and follow it. It layers on pstack. A question, a one-line edit, or work outside a repo does not need it. The repo's own `AGENTS.md` and `CLAUDE.md` win over it for verify, deploy, and `progress.md` rules.
-EOF
-  managed_block "$HOME/.claude/CLAUDE.md" "$claude_block"
+  installed="$(claude plugin list --json)"
+  for plugin in pstack andrew-stack; do
+    action="$(printf '%s' "$installed" | python3 -I -c '
+import json, sys
+entries = json.load(sys.stdin)
+print("update" if any(p.get("id") == sys.argv[1] and p.get("scope") == "user" for p in entries) else "install")
+' "$plugin@$market")"
+    run claude plugin "$action" "$plugin@$market" --scope user
+  done
+  managed_block "$HOME/.claude/CLAUDE.md" "$stack/policy/engineering.md"
+  sync_hook="$HOME/.claude/hooks/git-sync-on-start.sh"
+  if [[ -f "$sync_hook" ]]; then
+    if grep -Fxq '# Claude Code SessionStart hook: sync with GitHub before any work starts.' "$sync_hook" ||
+       grep -Fxq '# andrew-stack SessionStart: fetch remote refs without changing shared local work.' "$sync_hook"; then
+      run install -m 0755 "$stack/hooks/git-sync-on-start.sh" "$sync_hook"
+    else
+      echo "  WARNING: custom SessionStart hook preserved at $sync_hook; review shared-checkout mutations."
+    fi
+  fi
 else
   echo "  claude CLI not found, skipped"
 fi
@@ -73,10 +86,11 @@ if command -v codex >/dev/null; then
   fi
   run codex plugin add "pstack@$market"
   run codex plugin add "andrew-stack@$market"
-  managed_block "$HOME/.codex/AGENTS.md" "$stack/codex/AGENTS.md"
+  managed_block "$HOME/.codex/AGENTS.md" "$stack/policy/engineering.md"
 
   # Register the guard as a global Codex hook too, from a stable path, so it does not
   # depend on Codex loading plugin hooks or on the plugin cache's version folder.
+  run mkdir -p "$HOME/.codex/hooks"
   run install -m 0755 "$stack/hooks/guard.py" "$HOME/.codex/hooks/andrew_guard.py"
   run python3 -I - "$HOME/.codex/hooks.json" <<'PY'
 import json, pathlib, sys
@@ -84,7 +98,9 @@ path = pathlib.Path(sys.argv[1])
 config = json.loads(path.read_text()) if path.exists() else {}
 pre = config.setdefault("hooks", {}).setdefault("PreToolUse", [])
 command = 'python3 -I "$HOME/.codex/hooks/andrew_guard.py"'
-pre[:] = [g for g in pre if not any(h.get("command") == command for h in g.get("hooks", []))]
+for group in pre:
+    group["hooks"] = [hook for hook in group.get("hooks", []) if hook.get("command") != command]
+pre[:] = [group for group in pre if group.get("hooks")]
 pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": command, "timeout": 10,
                                           "statusMessage": "andrew-stack guard"}]})
 path.write_text(json.dumps(config, indent=2) + "\n")

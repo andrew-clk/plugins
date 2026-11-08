@@ -94,6 +94,78 @@ class Guard(unittest.TestCase):
         ]:
             self.assertAllowed(cmd)
 
+    def test_deploy_help_is_command_local(self):
+        for cmd in [
+            "railway up --help | head -65; railway logs --help | head -45; git status --short; git rev-parse HEAD",
+            "railway up -h",
+            "railway --help up",
+            "railway help up",
+            "vercel deploy --prod --help",
+            "vercel promote -h",
+            "vercel deploy --prod --force --help",
+            "npx vercel --help --prod",
+            "env CI=1 railway up --service web --help",
+            "bash -lc 'railway up --help | head -65'",
+            "echo 'railway up'; git status --short",
+        ]:
+            with self.subTest(command=cmd):
+                self.assertAllowed(cmd)
+
+    def test_help_never_exempts_other_mutations_or_option_values(self):
+        for cmd in [
+            "railway up --help; railway up",
+            "railway up --help | railway up",
+            "railway up && echo --help",
+            "echo 'railway up --help'; railway up",
+            "bash -lc 'railway up --help; railway up'",
+            "vercel --help; vercel --prod",
+            "railway up --service --help",
+            "railway up --message --help",
+            "railway up --service=--help",
+            "railway up -- --help",
+            "railway up > --help",
+            "railway up &> --help",
+            "railway up >| --help",
+            "railway up >& --help",
+            "vercel deploy --prod &>> -h",
+            "railway up <& --help",
+            "vercel deploy --prod --token --help",
+            "vercel deploy --prod --meta --help",
+            "vercel deploy --prod -- --help",
+        ]:
+            with self.subTest(command=cmd):
+                self.assertGuarded(cmd)
+
+    def test_matching_force_push_is_guarded(self):
+        path = repo_on("feature/matching")
+        subprocess.run(["git", "-C", path, "config", "push.default", "matching"], check=True)
+        self.assertGuarded("git push --force", path)
+        self.assertGuarded("git push --force origin", path)
+        self.assertGuarded("git -c push.default=matching push --force", self.feature)
+        self.assertAllowed("git -c push.default=current push --force", path)
+        self.assertAllowed("git push --force origin feature/x", path)
+        self.assertAllowed("git push --force --dry-run", path)
+        self.assertAllowed("git push --force origin --tags", path)
+
+    def test_exec_command_payload(self):
+        result = run("", self.feature, {
+            "turn_id": "t1", "tool_name": "exec_command",
+            "tool_input": {"cmd": "railway up", "workdir": self.feature},
+        })
+        self.assertEqual(result["permissionDecision"], "deny")
+        self.assertIn("railway up", result["permissionDecisionReason"])
+        self.assertIsNone(run("", self.feature, {
+            "turn_id": "t1", "tool_name": "exec_command",
+            "tool_input": {"cmd": "railway up --help"},
+        }))
+
+    def test_exec_command_uses_workdir_for_branch_checks(self):
+        result = run("", self.feature, {
+            "turn_id": "t1", "tool_name": "exec_command",
+            "tool_input": {"cmd": "git push --force", "workdir": self.main},
+        })
+        self.assertEqual(result["permissionDecision"], "deny")
+
     def test_writes_to_live_money_apis_are_guarded(self):
         for cmd in [
             "curl -X POST https://api.bukku.my/sales/payments -d @p.json",

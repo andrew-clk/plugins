@@ -1,6 +1,6 @@
 {
   "name": "andrew-stack",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Andrew's engineering style on top of pstack for Claude Code and Codex: verified push to main, repo runbooks first, money and live-data safety, a guard hook for irreversible commands, and cross-model review from the other CLI.",
   "author": {
     "name": "Andrew",

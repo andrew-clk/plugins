@@ -1,0 +1,25 @@
+name: Test Andrew stack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'andrew-stack/**'
+      - '.github/workflows/andrew-stack.yml'
+  pull_request:
+    paths:
+      - 'andrew-stack/**'
+      - '.github/workflows/andrew-stack.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n andrew-stack/scripts/install.sh andrew-stack/hooks/git-sync-on-start.sh
+      - name: Test guards, installation and concurrent checkout preservation
+        run: python3 -I -m unittest discover -s andrew-stack/tests -p 'test_*.py'

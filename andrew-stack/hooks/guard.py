@@ -47,7 +47,13 @@ VERCEL_VALUE_OPTS = {"--scope", "-S", "--token", "-t", "--cwd", "--local-config"
 VERCEL_LOCAL = {"build", "pull", "dev", "env", "logs", "inspect", "ls", "list", "whoami",
                 "link", "login", "logout", "domains", "certs", "dns", "help", "init", "git"}
 VERCEL_LIVE = {"promote", "rollback", "remove", "rm", "redeploy"}
-RAILWAY_VALUE_OPTS = {"--service", "-s", "--environment", "-e", "--project", "-p"}
+RAILWAY_VALUE_OPTS = {"--service", "-s", "--environment", "-e", "--project", "-p",
+                      "--message", "-m"}
+DEPLOY_HELP_VALUE_OPTS = VERCEL_VALUE_OPTS | {
+    "--env", "-e", "--build-env", "-b", "--meta", "-m", "--archive", "--regions",
+    "--name", "-n", "--listen", "-l",
+}
+REDIRECTIONS = {">", ">>", "<", "<<", "<<<", "<>", "&>", "&>>", ">&", ">|", "<&"}
 CURL_SHORT_VALUE = set("AbcCdDeEFHKmoPQrTuUwxXyYz")
 CURL_LONG_VALUE = {"--request", "--data", "--data-raw", "--data-binary", "--data-urlencode",
                    "--data-ascii", "--json", "--form", "--form-string", "--upload-file", "--header",
@@ -120,7 +126,7 @@ def git(cwd: str, *args: str) -> list[str]:
 def check_git_push(argv: list[str], cwd: str, branch: str | None = None) -> str | None:
     if not argv or argv[0] != "git":
         return None
-    i, config_push = 1, []
+    i, config_push, push_default = 1, [], None
     while i < len(argv) and argv[i].startswith("-"):
         if argv[i] in {"-C", "-c", "--git-dir", "--work-tree"} and i + 1 < len(argv):
             if argv[i] == "-C":
@@ -128,6 +134,8 @@ def check_git_push(argv: list[str], cwd: str, branch: str | None = None) -> str 
             key, _, value = argv[i + 1].partition("=")
             if argv[i] == "-c" and key.startswith("remote.") and key.endswith(".push"):
                 config_push.append(value)
+            if argv[i] == "-c" and key == "push.default":
+                push_default = value
             i += 2
         else:
             i += 1
@@ -155,6 +163,9 @@ def check_git_push(argv: list[str], cwd: str, branch: str | None = None) -> str 
     if not refspecs:
         refspecs = config_push or git(cwd, "config", "--get-all", f"remote.{remote}.push")
     if not refspecs and "--tags" not in flags:
+        push_default = push_default or next(iter(git(cwd, "config", "--get", "push.default")), "")
+        if force_all and push_default == "matching":
+            return "git push --force with push.default=matching can rewrite main and master."
         refspecs = [branch] if branch else git(cwd, "symbolic-ref", "--short", "-q", "HEAD")
     if "--all" in flags or "--branches" in flags:
         refspecs = [*refspecs, "main"]
@@ -196,11 +207,29 @@ def subcommand(rest: list[str], value_opts: set[str]) -> str:
     return ""
 
 
+def requests_help(rest: list[str], value_opts: set[str]) -> bool:
+    """Recognize a help flag only where the CLI would receive an option."""
+    j = 0
+    while j < len(rest):
+        token = rest[j]
+        if token == "--":
+            return False
+        if token in value_opts or token in REDIRECTIONS:
+            j += 2
+            continue
+        if token in {"--help", "-h"}:
+            return True
+        j += 1
+    return False
+
+
 def check_deploy(argv: list[str]) -> str | None:
     if not argv:
         return None
     tool, rest = argv[0], argv[1:]
     if tool == "vercel":
+        if requests_help(rest, DEPLOY_HELP_VALUE_OPTS):
+            return None
         sub = subcommand(rest, VERCEL_VALUE_OPTS)
         if sub in VERCEL_LOCAL:
             return None
@@ -210,6 +239,8 @@ def check_deploy(argv: list[str]) -> str | None:
         if sub in VERCEL_LIVE or prod:
             return f"vercel {sub or 'deploy'} changes production directly, outside git history."
     if tool == "railway":
+        if requests_help(rest, RAILWAY_VALUE_OPTS):
+            return None
         sub = subcommand(rest, RAILWAY_VALUE_OPTS)
         if sub in {"up", "redeploy", "down", "delete"}:
             return f"railway {sub} changes a live Railway service."
@@ -390,7 +421,8 @@ def evaluate(command: str, cwd: str, depth: int = 0) -> str | None:
 
 
 def command_from(payload: dict) -> str:
-    raw = (payload.get("tool_input") or {}).get("command", "")
+    tool_input = payload.get("tool_input") or {}
+    raw = tool_input.get("command", tool_input.get("cmd", ""))
     if isinstance(raw, list):
         raw = raw[-1] if len(raw) >= 3 and raw[1] in {"-c", "-lc"} else " ".join(raw)
     return raw if isinstance(raw, str) else ""
@@ -409,7 +441,7 @@ def main() -> int:
         command = command_from(payload)
         if not command:
             return 0
-        reason = evaluate(command, payload.get("cwd") or os.getcwd())
+        reason = evaluate(command, (payload.get("tool_input") or {}).get("workdir") or payload.get("cwd") or os.getcwd())
     except Exception as exc:  # noqa: BLE001
         print(f"andrew-stack guard skipped: {exc}", file=sys.stderr)
         return 0
@@ -419,12 +451,12 @@ def main() -> int:
     if harness(payload) == "codex":
         decision = "deny"
         message = (
-            f"andrew-stack guard: {reason} This is irreversible, so it needs Andrew. "
-            f"Stop and hand him the exact command to run himself:\n{command}"
+            f"andrew-stack guard: {reason} This action is guarded; the hook cannot verify conversation authorization. "
+            f"Stop this command, continue independent permitted work, and hand Andrew the exact command if no harness approval route is available:\n{command}"
         )
     else:
         decision = "ask"
-        message = f"andrew-stack guard: {reason} Confirm only if Andrew asked for this now."
+        message = f"andrew-stack guard: {reason} Confirm only with applicable explicit authorization or the repo runbook; otherwise stop this action."
     json.dump(
         {"hookSpecificOutput": {
             "hookEventName": "PreToolUse",

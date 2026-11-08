@@ -16,7 +16,7 @@ A thin router over pstack's `poteto-mode`. Principles, playbooks, and workflow s
 
 ## Find pstack
 
-Run `bash <this skill dir>/scripts/pstack-path.sh`. It prints the pstack folder that holds `skills/` and `docs/`. Call it `<pstack>`. If it prints nothing, pstack is not installed. Stop and tell Andrew to run `andrew-stack/scripts/install.sh` from his plugins clone.
+Run `bash <this skill dir>/scripts/pstack-path.sh`. It prints the pstack folder that holds `skills/` and `docs/`. Call it `<pstack>`. If it prints nothing, report that pstack is unavailable and continue with the repo runbook and these gates. Repair installation when that is in scope; do not block ordinary engineering on optional workflow tooling.
 
 pstack skills are mostly slash-only, so read them as files: `<pstack>/skills/<name>/SKILL.md`, playbooks at `<pstack>/skills/poteto-mode/playbooks/<name>.md`, principles at `<pstack>/skills/principle-<name>/SKILL.md`.
 
@@ -35,11 +35,11 @@ pstack is written in Cursor names. Translate them before you act:
 
 ## Start
 
-1. **Read the repo.** `AGENTS.md`, `CLAUDE.md`, and `progress.md` when they exist. `git status` and `git log --oneline -5`. If local `main` and `origin/main` diverged, or the tree holds someone else's uncommitted work, say so before you change anything.
+1. **Read the repo.** `AGENTS.md`, `CLAUDE.md`, and `progress.md` when they exist. Fetch origin, inspect status, history and worktrees. Apply `../../policy/engineering.md` for shared-checkout ownership and isolation. Another session's uncommitted work or diverged local main is a reason to isolate, not stop all work.
 2. **Triage the rigor tier.** Say the tier and why in one line.
    - **Lite.** A question, one or two obvious edits, an app that will not start with a clear cause, an ops chore. No playbook ceremony. Still reproduce, verify, and ship per the gates.
-   - **Standard.** Match a pstack playbook and copy its steps into the todolist verbatim. A skipped step stays as `skip: <reason>`.
-   - **Deep.** Money, accounting, or delivery integrations, schema or data migrations, cross-repo contracts, and anything that runs unattended. Route to pstack **figure-it-out** or a deep playbook here, and always run **cross-review** before shipping.
+   - **Standard.** Match a pstack playbook, then make a short task-specific plan. Keep its applicable verification steps. Skip unavailable Cursor tooling and duplicate ceremony with a brief reason; no verbatim checklist is required.
+   - **Deep.** Money, accounting, delivery integrations, schema/data migrations, cross-repo contracts, unattended execution and authorization hooks. Use a focused plan and run **cross-review** before shipping. Use **figure-it-out** for substantial work with no suitable playbook, not as mandatory overhead for a small fix.
 
    Work that touches money, live customer data, or production state is never lite.
 3. **Restate the goal** per poteto-mode's first trigger. Andrew's asks are short ("fix it", "make it runnable"), so name what done looks like in a checkable way before you start.
@@ -61,12 +61,18 @@ Use pstack's PR playbooks only when the repo's `AGENTS.md` asks for PRs or Andre
 ## Andrew gates
 
 - **Push to main, verified.** After a bug fix or a bigger change, ship it to `main` without being asked, per `playbooks/ship-to-main.md`. Never push something that has not passed the repo's gate. Never force-push `main`. Small tweaks can wait and go out with the next meaningful change.
-- **Irreversible means Andrew.** Pause for production deploys outside the repo's runbook, writes to live accounting or delivery APIs, sending messages to customers or staff (WhatsApp included), deleting or bulk-updating production data, and destructive migrations. The andrew-stack guard hook stops the shell forms of these. A script that does the same thing through code (`node scripts/x.mjs`, `railway run ...`) is not caught by the hook and needs the same pause. Reversible work proceeds without asking.
+- **Authorization follows the action.** Apply the Guard and authorization section of `../../policy/engineering.md`. Existing explicit authorization and repo runbooks count; hook denials still stand. Stop the rejected action, continue independent work, and never work around a denial. Read-only help and diagnostics need no confirmation. Normal verified pushes and their configured auto-deploys are authorized.
 - **Money is integer cents.** Never floats for amounts. Name the owner of each figure (which system computes it, who rounds) and reconcile against the source to the cent before calling it correct.
 - **Key by stable IDs.** Resolve records by their system ID (an invoice ID, a Slides `objectId`, an order ID), never by a position, display number, or slide number. Numbers renumber. IDs do not.
 - **The trail is `progress.md`.** Follow the repo's own `progress.md` rules for what to record and its size cap. A deep or unattended run can keep a local `show-me-your-work` TSV, then summarize it into `progress.md`. Do not keep two committed trails.
 - **Decided means decided.** When `progress.md` or Andrew's notes record a decision, act on it. Do not re-derive it or ask again.
 - **Second opinion from the other family.** Run **cross-review** on deep-tier changes and on any contested design. Verify each finding by running it before you act on it.
+
+## Concurrent agents and workflow scope
+
+Follow `../../policy/engineering.md` for worktree isolation and integration. Do not switch or synchronize another session's checkout. Delegates own only their assigned paths and do not publish unless explicitly assigned. Cross-review is read-only and must not start another review recursively.
+
+Use delegation when it provides an independent investigation or review, not merely because an upstream playbook names a model. Use available models; do not install Cursor tools or change model settings to satisfy a playbook. Andrew's message-authorization rule overrides pstack's generic permission to send team messages.
 
 ## Writing the reply
 
