@@ -71,6 +71,12 @@ class Guard(unittest.TestCase):
         self.assertGuarded("git push -f", self.main)
         self.assertAllowed("git push -f", self.feature)
 
+    def test_railway_deployments_are_allowed(self):
+        for cmd in ["railway up", "railway up --service web --environment production", "railway redeploy --service web", "bash -lc 'railway up'", "railway up --help | head -65; railway logs --help | head -45; git status --short; git rev-parse HEAD"]:
+            self.assertAllowed(cmd)
+        self.assertGuarded("railway up; railway delete")
+        self.assertIsNone(run("railway up", self.feature, {"turn_id": "t1"}))
+
     def test_production_deploys_are_guarded(self):
         for cmd in [
             "vercel --prod",
@@ -78,8 +84,8 @@ class Guard(unittest.TestCase):
             "vercel deploy --target production",
             "vercel promote https://x.vercel.app",
             "vercel rollback",
-            "railway up /tmp/mcp --path-as-root",
-            "railway redeploy --service web",
+            "railway down /tmp/mcp --path-as-root",
+            "railway delete --service web",
         ]:
             self.assertGuarded(cmd)
 
@@ -96,39 +102,39 @@ class Guard(unittest.TestCase):
 
     def test_deploy_help_is_command_local(self):
         for cmd in [
-            "railway up --help | head -65; railway logs --help | head -45; git status --short; git rev-parse HEAD",
-            "railway up -h",
+            "railway down --help | head -65; railway logs --help | head -45; git status --short; git rev-parse HEAD",
+            "railway down -h",
             "railway --help up",
             "railway help up",
             "vercel deploy --prod --help",
             "vercel promote -h",
             "vercel deploy --prod --force --help",
             "npx vercel --help --prod",
-            "env CI=1 railway up --service web --help",
-            "bash -lc 'railway up --help | head -65'",
-            "echo 'railway up'; git status --short",
+            "env CI=1 railway down --service web --help",
+            "bash -lc 'railway down --help | head -65'",
+            "echo 'railway down'; git status --short",
         ]:
             with self.subTest(command=cmd):
                 self.assertAllowed(cmd)
 
     def test_help_never_exempts_other_mutations_or_option_values(self):
         for cmd in [
-            "railway up --help; railway up",
-            "railway up --help | railway up",
-            "railway up && echo --help",
-            "echo 'railway up --help'; railway up",
-            "bash -lc 'railway up --help; railway up'",
+            "railway down --help; railway down",
+            "railway down --help | railway down",
+            "railway down && echo --help",
+            "echo 'railway down --help'; railway down",
+            "bash -lc 'railway down --help; railway down'",
             "vercel --help; vercel --prod",
-            "railway up --service --help",
-            "railway up --message --help",
-            "railway up --service=--help",
-            "railway up -- --help",
-            "railway up > --help",
-            "railway up &> --help",
-            "railway up >| --help",
-            "railway up >& --help",
+            "railway down --service --help",
+            "railway down --message --help",
+            "railway down --service=--help",
+            "railway down -- --help",
+            "railway down > --help",
+            "railway down &> --help",
+            "railway down >| --help",
+            "railway down >& --help",
             "vercel deploy --prod &>> -h",
-            "railway up <& --help",
+            "railway down <& --help",
             "vercel deploy --prod --token --help",
             "vercel deploy --prod --meta --help",
             "vercel deploy --prod -- --help",
@@ -150,13 +156,13 @@ class Guard(unittest.TestCase):
     def test_exec_command_payload(self):
         result = run("", self.feature, {
             "turn_id": "t1", "tool_name": "exec_command",
-            "tool_input": {"cmd": "railway up", "workdir": self.feature},
+            "tool_input": {"cmd": "railway down", "workdir": self.feature},
         })
         self.assertEqual(result["permissionDecision"], "deny")
-        self.assertIn("railway up", result["permissionDecisionReason"])
+        self.assertIn("railway down", result["permissionDecisionReason"])
         self.assertIsNone(run("", self.feature, {
             "turn_id": "t1", "tool_name": "exec_command",
-            "tool_input": {"cmd": "railway up --help"},
+            "tool_input": {"cmd": "railway down --help"},
         }))
 
     def test_exec_command_uses_workdir_for_branch_checks(self):
@@ -214,9 +220,9 @@ class Guard(unittest.TestCase):
 
     def test_cross_review_bypasses_are_guarded(self):
         for cmd in [
-            "echo ready # next\nrailway up",
-            "sudo -n railway up",
-            "if true; then railway up; fi",
+            "echo ready # next\nrailway down",
+            "sudo -n railway down",
+            "if true; then railway down; fi",
             "git push origin '+refs/heads/*:refs/heads/*'",
             "git -c remote.origin.push=+HEAD:main push origin",
             "vercel --scope my-team promote https://x.vercel.app",
@@ -242,7 +248,7 @@ class Guard(unittest.TestCase):
             "git push origin +feature:feature main:main",
             "git push --dry-run --force origin main",
             "curl --get --data page=1 https://api.bukku.my/sales/invoices",
-            "railway status # then railway up later",
+            "railway status # then railway down later",
             "psql db -c \"SELECT 1 -- DROP TABLE x\"",
         ]:
             self.assertAllowed(cmd, self.main)
@@ -253,7 +259,7 @@ class Guard(unittest.TestCase):
             "curl -sS \\\n  -X POST \\\n  https://api.bukku.my/sales/invoices -d @invoice.json",
             "pnpm exec vercel --prod",
             "npm exec -- vercel --prod",
-            "bash -lc 'railway up --service web'",
+            "bash -lc 'railway down --service web'",
             "mysql db -e 'DELETE FROM `invoices`;'",
             "mysql db -e 'UPDATE `invoices` SET paid_cents = 0;'",
             "git switch main && git push --force",
@@ -281,7 +287,7 @@ class Guard(unittest.TestCase):
         self.assertIn("vercel --prod", result["permissionDecisionReason"])
 
     def test_codex_array_command_shape(self):
-        result = run(["bash", "-lc", "railway up"], self.feature, {"turn_id": "t1"})
+        result = run(["bash", "-lc", "railway down"], self.feature, {"turn_id": "t1"})
         self.assertEqual(result["permissionDecision"], "deny")
 
     def test_large_nested_input_finishes_fast(self):

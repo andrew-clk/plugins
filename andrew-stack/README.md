@@ -30,13 +30,13 @@ Restart both CLIs afterwards. Codex may ask you to trust the changed hooks. Exis
 | [`scheduled-automation`](./skills/andrew-mode/playbooks/scheduled-automation.md) | Cron and triage bots. Stable IDs, idempotent state, refusal paths, two-run proof. |
 | [`report-or-deck`](./skills/andrew-mode/playbooks/report-or-deck.md) | Ads reports and decks. Sourced, reconciled, short. |
 | [`cross-review`](./skills/cross-review/SKILL.md) | A second opinion from the other model family. Claude Code asks Codex, and Codex asks Claude, both read-only. You then verify each finding by running it. |
-| [`guard.py`](./hooks/guard.py) | PreToolUse hook. Stops force-push or delete of `main`, production deploys (`vercel --prod`, `railway up`), writes to live Bukku or Lalamove APIs, and destructive SQL. Claude Code asks you to confirm. Codex denies and hands you the command. |
+| [`guard.py`](./hooks/guard.py) | PreToolUse hook. Stops force-push or delete of `main`, production deploys (`vercel --prod`; Railway shutdown/deletion), writes to live Bukku or Lalamove APIs, and destructive SQL. Claude Code asks you to confirm. Codex denies and hands you the command. |
 
 ## The gates andrew-mode adds over poteto-mode
 
 - **Push to main, verified.** No PRs unless a repo or I ask for one.
 - **Repo rules win.** A repo's `AGENTS.md` deploy runbook, verify gate, and `progress.md` rules are the procedure.
-- **Authorization follows the action.** Existing explicit authorization and repo runbooks count. Direct deploy commands remain conservatively gated because the hook cannot read that context. Normal verified pushes and their configured automatic deploys are allowed.
+- **Authorization follows the action.** Existing explicit authorization and repo runbooks count. Railway up/redeploy proceed under the repo runbook without guard approval; shutdown/deletion and direct Vercel production commands remain gated. Normal verified pushes and their configured automatic deploys are allowed.
 - **Concurrent work is isolated.** Separate worktrees and task branches for Claude and Codex; integrate and reverify before a fast-forward push to main. Startup hooks never mutate another session's checkout.
 - **A denial stops the action.** Continue unrelated permitted work. Do not wrap or reroute a rejected action. Authorized policy maintenance can fix a reproduced false positive, then retry after installation and verification.
 - **Money is integer cents, keyed by stable IDs.**
@@ -69,3 +69,9 @@ made concurrency use isolated worktrees, and made the recognized Git startup
 hook observational. The installer now updates existing Claude plugins.
 
 This release does not disable production guards or grant broad live-data writes.
+
+## 0.2.1 (2026-11-15)
+
+Allow Railway up and redeploy without a guard prompt. Repository verification
+and rollback requirements still apply. Retain shutdown/deletion, destructive SQL,
+live financial API and protected-branch protections.

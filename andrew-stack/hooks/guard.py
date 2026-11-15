@@ -242,7 +242,7 @@ def check_deploy(argv: list[str]) -> str | None:
         if requests_help(rest, RAILWAY_VALUE_OPTS):
             return None
         sub = subcommand(rest, RAILWAY_VALUE_OPTS)
-        if sub in {"up", "redeploy", "down", "delete"}:
+        if sub in {"down", "delete"}:
             return f"railway {sub} changes a live Railway service."
     return None
 
