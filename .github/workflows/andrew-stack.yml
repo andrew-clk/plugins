@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check shell syntax
-        run: bash -n andrew-stack/scripts/install.sh andrew-stack/hooks/git-sync-on-start.sh
+        run: |
+          while IFS= read -r -d '' script; do
+            bash -n "$script"
+          done < <(find andrew-stack -type f -name '*.sh' -print0)
       - name: Test guards, installation and concurrent checkout preservation
         run: python3 -I -m unittest discover -s andrew-stack/tests -p 'test_*.py'

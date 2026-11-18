@@ -1,14 +1,20 @@
-# Andrew's engineering policy (Claude Code and Codex)
+# Andrew's engineering policy
 
 ## Scope and authority
 
-For non-trivial engineering in a git repo, load `andrew-stack:andrew-mode` (Codex may expose it as `andrew-mode`). Questions and obvious small edits need no playbook ceremony. Andrew's current instructions take precedence. The repo's `AGENTS.md` and `CLAUDE.md` own verification, release, deploy and progress-log procedures. This policy fills gaps.
+For non-trivial engineering in a git repo, when the skill is available, load `andrew-stack:andrew-mode` (Codex may expose it as `andrew-mode`). Questions and obvious small edits need no playbook ceremony. Andrew's current instructions take precedence. The repo's `AGENTS.md` and `CLAUDE.md` own verification, release, deploy and progress-log procedures. This policy fills gaps.
+
+## App development defaults
+
+Apply Ponytail when implementing or reviewing app changes. Read `~/.agents/skills/ponytail/SKILL.md` for the workflow. First look for an existing feature, configuration option or small change that meets the requirement. Keep the verification the repo requires.
+
+Use Graphify for questions that span modules, unfamiliar architecture or the impact of a change. Read `~/.agents/skills/graphify/SKILL.md`. Build or refresh the local code graph with `graphify update .` in the relevant project directory. Prefer a current local graph, check important relationships against source, and scope new graphs to the code under investigation. Keep generated graphs and caches out of commits unless the repo maintains them. Small, well-localized tasks can go straight to source. If a tool is unavailable, continue with source inspection and report the missing installation.
 
 ## Start and concurrent work
 
 Fetch `origin`, then inspect status, branch, worktrees and ahead/behind counts. Fetch failure blocks publishing until synchronization can be verified; it does not block local diagnosis or tests. Report unpushed or diverged shared `main` without resetting, rebasing, stashing or committing someone else's work.
 
-Claude Code and Codex may be working simultaneously. For concurrent or uncertain ownership, create a separate worktree with a unique `codex/<task>` or `claude/<task>` branch from `origin/main`. This is isolation, not a requirement to open a PR. Leave the shared checkout and its local `main` alone. A clean checkout is not proof that no other session owns it. Use separate dev-server ports, test databases and generated output. Coordinate changes to shared release files and contracts when integrating.
+Multiple coding agents may be working simultaneously. For concurrent or uncertain ownership, create a separate worktree with a unique `codex/<task>` or `claude/<task>` branch from `origin/main`. This is isolation, not a requirement to open a PR. Leave the shared checkout and its local `main` alone. A clean checkout is not proof that no other session owns it. Use separate dev-server ports, test databases and generated output. Coordinate changes to shared release files and contracts when integrating.
 
 Fast-forward local `main` only when the current checkout is clean and exclusively owned. Startup hooks must not switch branches, merge, or advance local branch refs. Unrelated dirty files or a stale shared `main` do not prevent isolated work from `origin/main`. Ask only when ownership or conflicting intent cannot be resolved from evidence.
 

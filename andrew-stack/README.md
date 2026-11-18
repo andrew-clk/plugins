@@ -1,6 +1,6 @@
 # andrew-stack
 
-My engineering style, layered on [pstack](../pstack/), for Claude Code and Codex. pstack does the heavy lifting: principles, playbooks, and the review skills. andrew-stack changes what pstack gets wrong for how I work, and adds the guardrails my repos need.
+My engineering style, layered on [pstack](../pstack/), for app development. pstack does the heavy lifting: principles, playbooks, and the review skills. andrew-stack changes what pstack gets wrong for how I work, and adds the guardrails my repos need.
 
 ## Install
 
@@ -9,16 +9,20 @@ git clone https://github.com/andrew-clk/plugins && cd plugins
 bash andrew-stack/scripts/install.sh            # add --dry-run to preview
 ```
 
-For Claude Code alone, `/plugin install andrew-stack --marketplace andrew-clk/plugins` installs the plugin. Use the script for both harnesses and the shared global policy.
+Run the script once per device with Git, Bash, Python 3, curl and uv available. The installer uses uv to provision Python 3.13 and the pinned Graphify CLI. In Claude Code, `/plugin install andrew-stack --marketplace andrew-clk/plugins` loads the plugin in that harness. The script also installs the shared tools and global policy.
 
-The script is safe to rerun. It:
+| Agent | What setup does |
+|---|---|
+| Claude Code and Codex | Installs or updates pstack and Andrew Stack and writes the managed global policy. Registers the Codex shell guard and updates recognized legacy Claude startup hooks. |
+| Gemini CLI and Hermes | Writes the same policy into the detected agent's global instructions. |
+| Grok Bot desktop | Exports `~/.agents/skills/andrew-stack/SKILL.md`. Add its contents to each coding bot through that profile's Skills settings. Local tool use requires access to the Mac where the installer ran. |
+| OpenClaw, Docker Agent (default/coder), and other agents with shared skill discovery | Makes Andrew Stack, Ponytail and Graphify available under `~/.agents/skills/`. Activation depends on the agent. |
 
-- adds this repo as the `andrew-plugins` marketplace in both CLIs and installs `pstack` and `andrew-stack`;
-- installs the same [engineering policy](policy/engineering.md) into managed blocks in `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`, preserving text outside those blocks;
-- updates already-installed Claude plugins and replaces the recognized legacy Git startup hook with a fetch-and-report version that never moves a local branch;
-- registers the guard as a global Codex hook in `~/.codex/hooks.json`.
+Start a new session after setup. Codex may prompt you to trust updated hooks. Global policy blocks preserve surrounding instructions. Existing application repositories need no setup commits. For an update, use a current checkout of this repository and rerun the installer.
 
-Restart both CLIs afterwards. Codex may ask you to trust the changed hooks. Existing chats retain previously loaded instructions; start fresh chats for the new policy. If the installer warns about old global Git rules outside its managed block, reconcile those rules before starting concurrent work. It will not delete user-owned instructions.
+## 0.3.0
+
+Adds Ponytail 5.3.3 for implementation and review and Graphify 0.9.112 for local codebase exploration. Small changes can go straight to source. The marketplace retains pstack and its generated harness while dropping unrelated Cursor catalogue entries.
 
 ## What's in it
 

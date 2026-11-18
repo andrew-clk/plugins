@@ -24,7 +24,8 @@ pstack is written in Cursor names. Translate them before you act:
 
 - **Claude Code.** Read `<pstack>/docs/harness/claude-code.md` once per session and follow its tables. For subagents inside a playbook step, use `subagent_type: "andrew-stack:andrew-agent"` where pstack says `poteto-agent`.
 - **Codex.** `Task` is your subagent tool when the session has one. Without one, do the step yourself and say so. A todolist is the `update_plan` tool. `AskQuestion` is a plain question in your reply. Drop every model slug, because Codex runs on its configured model. The other model family comes from the **cross-review** skill. Skip `/setup-pstack`.
-- **Both.** `cursor-team-kit` is not installed. For `deslop`, review your own diff for slop before commit (Claude Code can run `/simplify`). For `control-ui`, drive the app with the repo's Playwright setup or a browser tool. For `control-cli`, run the CLI and read its real output. Bugbot, Cursor automations, cloud agents, and `/loop` do not exist here. Skip a step that needs one with `Skipped: <step>. <reason>.` and go on.
+- **Grok Bot and other agents.** Follow the shared engineering policy. Use the shell, browser, task tracking and review tools actually available in the session. For a missing optional tool, continue with an equivalent source or behavior check.
+- **All agents.** Follow the Ponytail and Graphify defaults in `../../policy/engineering.md`. For a marketplace-only installation missing those tools, the full device setup is `bash <andrew-stack plugin directory>/scripts/install.sh`. Review the diff before committing, run CLI checks against actual output and use the repo's browser tests for UI changes.
 
 ## Order of authority
 

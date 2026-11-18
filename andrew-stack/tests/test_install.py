@@ -2,13 +2,13 @@
 """Exercise installation without touching real CLI configuration or networks."""
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 STACK = Path(__file__).resolve().parents[1]
-INSTALL = STACK / "scripts/install.sh"
 SYNC = STACK / "hooks/git-sync-on-start.sh"
 GUARD_COMMAND = 'python3 -I "$HOME/.codex/hooks/andrew_guard.py"'
 
@@ -18,6 +18,11 @@ class Installer(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        # Run the real policy installer while stubbing the network dependency installer.
+        fixture = self.root / "stack"
+        shutil.copytree(STACK, fixture)
+        self.install = fixture / "scripts/install.sh"
+        (fixture / "scripts/install-project-tools.sh").write_text('echo "tools" >> "$CALLS.tools"\n')
         self.home = self.root / "home"
         self.home.mkdir()
         bindir = self.root / "bin"
@@ -33,14 +38,17 @@ if args == ['plugin', 'marketplace', 'list']:
 elif args == ['plugin', 'list', '--json']:
     print(os.environ.get('INSTALLED', '[]'))
 '''
-        for name in ("claude", "codex"):
+        for name in ("claude", "codex", "gemini", "hermes"):
             path = bindir / name
             path.write_text(cli)
             path.chmod(0o755)
         self.env = {**os.environ, "HOME": str(self.home), "PATH": str(bindir) + os.pathsep + os.environ["PATH"], "CALLS": str(self.root / "calls")}
 
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "HERMES_HOME"):
+            self.env.pop(key, None)
+
     def run_install(self, *args):
-        result = subprocess.run(["bash", str(INSTALL), *args], env=self.env, capture_output=True, text=True)
+        result = subprocess.run(["bash", str(self.install), *args], env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
@@ -53,6 +61,9 @@ elif args == ['plugin', 'list', '--json']:
             text = (self.home / app / filename).read_text()
             self.assertIn((STACK / "policy/engineering.md").read_text().strip(), text)
             self.assertEqual(text.count("<!-- andrew-stack:begin -->"), 1)
+        self.assertTrue((self.root / "calls.tools").is_file())
+        for path in (".gemini/GEMINI.md", ".hermes/SOUL.md", ".agents/skills/andrew-stack/SKILL.md"):
+            self.assertIn((STACK / "policy/engineering.md").read_text().strip(), (self.home / path).read_text())
         self.assertEqual((self.home / ".codex/hooks/andrew_guard.py").read_bytes(), (STACK / "hooks/guard.py").read_bytes())
         self.assertIn(["claude", "plugin", "install", "andrew-stack@andrew-plugins", "--scope", "user"], self.calls())
 
@@ -84,10 +95,69 @@ elif args == ['plugin', 'list', '--json']:
 
     def test_dry_run_never_mutates_configuration_or_calls_mutating_cli(self):
         self.run_install("--dry-run")
+        self.assertFalse((self.root / "calls.tools").exists())
+        self.assertEqual(list(self.home.iterdir()), [])
         self.assertFalse((self.home / ".claude").exists())
         self.assertFalse((self.home / ".codex").exists())
         for call in self.calls():
             self.assertIn(call[1:], [["plugin", "marketplace", "list"], ["plugin", "list", "--json"]])
+
+    def test_profile_policy_preserves_agent_identity_and_custom_instructions(self):
+        self.env["HERMES_HOME"] = str(self.home / "hermes-profile")
+        targets = [self.home / "hermes-profile/SOUL.md", self.home / ".gemini/GEMINI.md"]
+        for target in targets:
+            target.parent.mkdir()
+            target.write_text("Existing agent instructions.\n")
+        self.run_install()
+        first = [target.read_text() for target in targets]
+        self.run_install()
+        self.assertEqual(first, [target.read_text() for target in targets])
+        for content in first:
+            self.assertTrue(content.startswith("Existing agent instructions.\n"))
+            self.assertEqual(content.count("<!-- andrew-stack:begin -->"), 1)
+        self.assertFalse((self.home / ".hermes").exists())
+
+    def test_custom_claude_and_codex_profiles_include_working_guard(self):
+        claude = self.home / "Claude Profile"
+        codex = self.home / "Codex's $Profile"
+        self.env.update(CLAUDE_CONFIG_DIR=str(claude), CODEX_HOME=str(codex))
+        sync = claude / "hooks/git-sync-on-start.sh"
+        sync.parent.mkdir(parents=True)
+        sync.write_text("# Claude Code SessionStart hook: sync with GitHub before any work starts.\n")
+        self.run_install()
+        self.run_install()
+        self.assertEqual(sync.read_bytes(), SYNC.read_bytes())
+        for policy in (claude / "CLAUDE.md", codex / "AGENTS.md"):
+            self.assertEqual(policy.read_text().count("<!-- andrew-stack:begin -->"), 1)
+        self.assertFalse((self.home / ".claude").exists())
+        self.assertFalse((self.home / ".codex").exists())
+        groups = json.loads((codex / "hooks.json").read_text())["hooks"]["PreToolUse"]
+        commands = [hook["command"] for group in groups for hook in group["hooks"]]
+        self.assertEqual(len(commands), 1)
+        result = subprocess.run(
+            ["sh", "-c", commands[0]], input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "git status"}}),
+            env=self.env, capture_output=True, text=True, cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_incomplete_managed_block_preserves_original_text_on_rerun(self):
+        soul = self.home / ".hermes/SOUL.md"
+        soul.parent.mkdir()
+        original = "Identity\n<!-- andrew-stack:begin -->\nMy rule\n"
+        soul.write_text(original)
+        self.run_install()
+        first = soul.read_text()
+        self.run_install()
+        self.assertTrue(first.startswith(original))
+        self.assertEqual(soul.read_text(), first)
+
+    def test_active_hermes_profile_receives_policy(self):
+        base = self.home / ".hermes"
+        profile = base / "profiles/coder"
+        profile.mkdir(parents=True)
+        (base / "active_profile").write_text("coder\n")
+        self.run_install()
+        self.assertIn("andrew-stack:begin", (profile / "SOUL.md").read_text())
 
     def test_only_known_startup_hook_is_replaced(self):
         path = self.home / ".claude/hooks/git-sync-on-start.sh"

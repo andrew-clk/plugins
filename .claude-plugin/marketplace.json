@@ -18,7 +18,7 @@
     {
       "name": "andrew-stack",
       "source": "./andrew-stack",
-      "description": "Andrew's engineering style on top of pstack for Claude Code and Codex: verified push to main, repo runbooks first, money and live-data safety, a guard hook for irreversible commands, and cross-model review from the other CLI."
+      "description": "Andrew's engineering style on top of pstack with shared app development defaults for Claude Code, Codex and Grokbot: verified push to main, repo runbooks first, money and live-data safety, a guard hook for irreversible commands, and cross-model review from the other CLI."
     }
   ]
 }
